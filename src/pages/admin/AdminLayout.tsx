@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   FolderOpen,
@@ -22,7 +22,32 @@ interface Props {
 
 export default function AdminLayout({ children }: Props) {
   const location   = useLocation();
+  const navigate   = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/admin/me')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.ok || !data.authenticated) {
+          navigate('/admin/login', { replace: true });
+        } else {
+          setIsLoading(false);
+        }
+      })
+      .catch(() => {
+        navigate('/admin/login', { replace: true });
+      });
+  }, [navigate]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-[#FFD100] border-t-transparent flex rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   const Sidebar = (
     <aside className="flex flex-col h-full bg-[#111] border-r border-white/5 w-64">

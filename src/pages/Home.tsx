@@ -380,15 +380,15 @@ export default function Home() {
         
         <div className="flex gap-6 px-6 md:px-12 overflow-x-auto custom-scrollbar pt-16 pb-24 snap-x">
           {projects.map((project, i) => (
-            <motion.div
-              key={project.id}
-              initial={{ opacity: 0, scale: 0.9, x: 50 }}
-              whileInView={{ opacity: 1, scale: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1, duration: 0.6 }}
-              whileHover={{ y: -16 }}
-              className="min-w-[calc(25vw-2rem)] max-w-[340px] bg-[#FDFCFB] p-4 md:p-6 rounded-[40px] border-4 border-brand-black shadow-[16px_16px_0px_rgba(10,10,10,1)] group snap-start flex flex-col"
-            >
+            <Link to={`/work/${project.slug}`} key={project.id} className="min-w-[calc(25vw-2rem)] max-w-[340px] snap-start group cursor-pointer block h-full">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, x: 50 }}
+                whileInView={{ opacity: 1, scale: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1, duration: 0.6 }}
+                whileHover={{ y: -16 }}
+                className="h-full bg-[#FDFCFB] p-4 md:p-6 rounded-[40px] border-4 border-brand-black shadow-[16px_16px_0px_rgba(10,10,10,1)] flex flex-col"
+              >
               <div className="w-full aspect-[4/5] rounded-[24px] overflow-hidden border-2 border-brand-black mb-6 relative transform-gpu">
                 <img 
                   src={project.cover_image} 
@@ -416,6 +416,7 @@ export default function Home() {
                 </div>
               </div>
             </motion.div>
+          </Link>
           ))}
         </div>
 

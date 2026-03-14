@@ -1,29 +1,34 @@
-/**
- * Utility: Generate a bcrypt hash for a given password.
- *
- * Usage:
- *   npx tsx scripts/seed-admin.ts
- *   npx tsx scripts/seed-admin.ts myNewPassword
- *
- * The output hash can be inserted into the admin_users table:
- *   UPDATE admin_users SET password_hash = '<output>' WHERE id = '<your-id>';
- */
-
-import 'dotenv/config';
 import bcrypt from 'bcryptjs';
+import { PrismaClient } from '@prisma/client';
 
-const password = process.argv[2] ?? 'password';
-const COST = 12;
+const prisma = new PrismaClient();
 
 async function main() {
-  console.log(`\nGenerating bcrypt hash for password: "${password}"`);
-  const hash = await bcrypt.hash(password, COST);
-  console.log('\n─────────────────────────────────────────────────────────');
-  console.log('Hash:', hash);
-  console.log('─────────────────────────────────────────────────────────');
-  console.log('\nTo update the admin password, run this SQL in Supabase:');
-  console.log(`  UPDATE public.admin_users SET password_hash = '${hash}';`);
-  console.log('');
+  const adminExists = await prisma.adminUser.findFirst();
+
+  if (adminExists) {
+    console.log('Admin user already exists. Trimming and replacing...');
+    await prisma.adminUser.deleteMany();
+  }
+
+  const password = "Password";
+  const salt = await bcrypt.genSalt(12);
+  const passwordHash = await bcrypt.hash(password, salt);
+
+  await prisma.adminUser.create({
+    data: {
+      password_hash: passwordHash,
+    },
+  });
+
+  console.log('Admin seeded with password: Password');
 }
 
-main().catch(console.error);
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

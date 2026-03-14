@@ -1,50 +1,91 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import prisma from './prisma';
+import multer from 'multer';
 import { supabaseAdmin } from './supabaseAdmin';
+
+// Use memory storage to process uploads directly to Supabase via buffers.
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
 const router = Router();
 
 // ─── Session Cookie Name ──────────────────────────────────────────────────────
 const SESSION_COOKIE = 'admin_session';
-const SESSION_VALUE  = 'authenticated';  // simple token; swap for JWT in prod
+const SESSION_VALUE  = 'authenticated';
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 function requireAuth(req: Request, res: Response, next: () => void) {
-  // Authentication disabled per request
-  next();
+  if (req.cookies[SESSION_COOKIE] === SESSION_VALUE) {
+    next();
+  } else {
+    res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
 }
 
 // ─── POST /api/admin/login ────────────────────────────────────────────────────
-router.post('/login', async (req: Request, res: Response) => {
+// ─── POST /api/admin/login ────────────────────────────────────────────────────
+router.post('/upload', requireAuth, upload.single('file'), async (req: Request, res: Response): Promise<any> => {
+  if (!req.file) {
+    return res.status(400).json({ ok: false, error: 'No file uploaded' });
+  }
+
+  try {
+    const safeName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const uniqueFileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}-${safeName}`;
+
+    // Ensure bucket exists or ignore if it already does
+    await supabaseAdmin.storage.createBucket('projects', { public: true }).catch(() => {});
+
+    const { data, error } = await supabaseAdmin.storage
+      .from('projects')
+      .upload(uniqueFileName, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: false
+      });
+
+    if (error) {
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+
+    const { data: publicUrlData } = supabaseAdmin.storage
+      .from('projects')
+      .getPublicUrl(uniqueFileName);
+
+    return res.json({ ok: true, url: publicUrlData.publicUrl });
+  } catch (error: any) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+router.post('/login', async (req: Request, res: Response): Promise<any> => {
   const { password } = req.body ?? {};
   if (!password || typeof password !== 'string') {
     return res.status(400).json({ ok: false, error: 'Password required' });
   }
 
-  // Fetch the single admin user record
-  const { data: users, error } = await supabaseAdmin
-    .from('admin_users')
-    .select('password_hash')
-    .limit(1);
+  try {
+    const admin = await prisma.adminUser.findFirst();
+    if (!admin) {
+      return res.status(500).json({ ok: false, error: 'Admin user not found' });
+    }
 
-  if (error || !users || users.length === 0) {
-    return res.status(500).json({ ok: false, error: 'Admin user not found' });
+    const match = await bcrypt.compare(password, admin.password_hash);
+    if (!match) {
+      return res.status(401).json({ ok: false, error: 'Invalid password' });
+    }
+
+    res.cookie(SESSION_COOKIE, SESSION_VALUE, {
+      httpOnly: true,
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000,
+      secure: process.env.NODE_ENV === 'production',
+    });
+
+    return res.json({ ok: true });
+  } catch (error: any) {
+    return res.status(500).json({ ok: false, error: error.message });
   }
-
-  const match = await bcrypt.compare(password, users[0].password_hash);
-  if (!match) {
-    return res.status(401).json({ ok: false, error: 'Invalid password' });
-  }
-
-  // Set secure HTTP-only cookie
-  res.cookie(SESSION_COOKIE, SESSION_VALUE, {
-    httpOnly: true,
-    sameSite: 'strict',
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    secure: process.env.NODE_ENV === 'production',
-  });
-
-  return res.json({ ok: true });
 });
 
 // ─── POST /api/admin/logout ───────────────────────────────────────────────────
@@ -63,284 +104,278 @@ router.get('/me', requireAuth, (_req: Request, res: Response) => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 router.get('/dashboard', requireAuth, async (_req: Request, res: Response) => {
-  const [projects, selectedWork, faqs, journals] = await Promise.all([
-    supabaseAdmin.from('projects').select('id, title, created_at').order('created_at', { ascending: false }),
-    supabaseAdmin.from('projects').select('id').eq('show_in_selected_work', true),
-    supabaseAdmin.from('faq').select('id, updated_at').order('display_order'),
-    supabaseAdmin.from('journals').select('id'),
-  ]);
+  try {
+    const [projectsCount, selectedWorkCount, faqsCount, journalsCount, lastProject] = await Promise.all([
+      prisma.project.count(),
+      prisma.project.count({ where: { show_in_selected_work: true } }),
+      prisma.faq.count(),
+      prisma.journal.count(),
+      prisma.project.findFirst({ orderBy: { created_at: 'desc' } })
+    ]);
 
-  const lastProject = projects.data?.[0] ?? null;
-
-  res.json({
-    ok: true,
-    stats: {
-      totalProjects: projects.data?.length ?? 0,
-      selectedWorkCount: selectedWork.data?.length ?? 0,
-      totalFAQs: faqs.data?.length ?? 0,
-      totalJournals: journals.data?.length ?? 0,
-      lastProjectTitle: lastProject?.title ?? null,
-      lastProjectDate: lastProject?.created_at ?? null,
-    },
-  });
+    res.json({
+      ok: true,
+      stats: {
+        totalProjects: projectsCount,
+        selectedWorkCount: selectedWorkCount,
+        totalFAQs: faqsCount,
+        totalJournals: journalsCount,
+        lastProjectTitle: lastProject?.title ?? null,
+        lastProjectDate: lastProject?.created_at ?? null,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  PROJECTS
 // ═════════════════════════════════════════════════════════════════════════════
 
-// GET all projects
 router.get('/projects', requireAuth, async (_req: Request, res: Response) => {
-  const { data, error } = await supabaseAdmin
-    .from('projects')
-    .select('*, project_images(*)')
-    .order('display_order', { ascending: true });
-
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true, data });
-});
-
-// GET single project
-router.get('/projects/:id', requireAuth, async (req: Request, res: Response) => {
-  const { data, error } = await supabaseAdmin
-    .from('projects')
-    .select('*, project_images(*)')
-    .eq('id', req.params.id)
-    .single();
-
-  if (error) return res.status(404).json({ ok: false, error: 'Project not found' });
-  res.json({ ok: true, data });
-});
-
-// POST create project
-router.post('/projects', requireAuth, async (req: Request, res: Response) => {
-  const {
-    title, description, slug, folder_name, cover_image,
-    show_in_work_page, show_in_selected_work, display_order,
-  } = req.body ?? {};
-
-  if (!title || !slug) {
-    return res.status(400).json({ ok: false, error: 'Title and slug are required' });
+  try {
+    const data = await prisma.project.findMany({
+      include: { project_media: true },
+      orderBy: { display_order: 'asc' },
+    });
+    res.json({ ok: true, data });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
   }
-
-  const { data, error } = await supabaseAdmin
-    .from('projects')
-    .insert({
-      title: title.trim(),
-      description: description?.trim() ?? '',
-      slug: slug.trim().toLowerCase().replace(/\s+/g, '-'),
-      folder_name: folder_name?.trim() ?? slug.trim(),
-      cover_image: cover_image?.trim() ?? '',
-      show_in_work_page: Boolean(show_in_work_page),
-      show_in_selected_work: Boolean(show_in_selected_work),
-      display_order: Number(display_order) || 0,
-    })
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true, data });
 });
 
-// PUT update project
+router.get('/projects/:id', requireAuth, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const data = await prisma.project.findUnique({
+      where: { id: req.params.id },
+      include: { project_media: true },
+    });
+    if (!data) return res.status(404).json({ ok: false, error: 'Project not found' });
+    res.json({ ok: true, data });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+router.post('/projects', requireAuth, async (req: Request, res: Response): Promise<any> => {
+  const { title, description, slug, folder_name, cover_image, show_in_work_page, show_in_selected_work, display_order } = req.body ?? {};
+  if (!title || !slug) return res.status(400).json({ ok: false, error: 'Title and slug are required' });
+
+  try {
+    const data = await prisma.project.create({
+      data: {
+        title: title.trim(),
+        description: description?.trim() ?? '',
+        slug: slug.trim().toLowerCase().replace(/\s+/g, '-'),
+        folder_name: folder_name?.trim() ?? slug.trim(),
+        cover_image: cover_image?.trim() ?? '',
+        show_in_work_page: Boolean(show_in_work_page),
+        show_in_selected_work: Boolean(show_in_selected_work),
+        display_order: Number(display_order) || 0,
+      }
+    });
+    res.json({ ok: true, data });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 router.put('/projects/:id', requireAuth, async (req: Request, res: Response) => {
-  const {
-    title, description, slug, folder_name, cover_image,
-    show_in_work_page, show_in_selected_work, display_order,
-  } = req.body ?? {};
+  try {
+    const body = req.body ?? {};
+    const updates: Record<string, any> = {};
+    if (body.title !== undefined) updates.title = body.title.trim();
+    if (body.description !== undefined) updates.description = body.description.trim();
+    if (body.slug !== undefined) updates.slug = body.slug.trim().toLowerCase().replace(/\s+/g, '-');
+    if (body.folder_name !== undefined) updates.folder_name = body.folder_name.trim();
+    if (body.cover_image !== undefined) updates.cover_image = body.cover_image.trim();
+    if (body.show_in_work_page !== undefined) updates.show_in_work_page = Boolean(body.show_in_work_page);
+    if (body.show_in_selected_work !== undefined) updates.show_in_selected_work = Boolean(body.show_in_selected_work);
+    if (body.display_order !== undefined) updates.display_order = Number(body.display_order);
 
-  const updates: Record<string, unknown> = {};
-  if (title !== undefined) updates.title = title.trim();
-  if (description !== undefined) updates.description = description.trim();
-  if (slug !== undefined) updates.slug = slug.trim().toLowerCase().replace(/\s+/g, '-');
-  if (folder_name !== undefined) updates.folder_name = folder_name.trim();
-  if (cover_image !== undefined) updates.cover_image = cover_image.trim();
-  if (show_in_work_page !== undefined) updates.show_in_work_page = Boolean(show_in_work_page);
-  if (show_in_selected_work !== undefined) updates.show_in_selected_work = Boolean(show_in_selected_work);
-  if (display_order !== undefined) updates.display_order = Number(display_order);
-
-  const { data, error } = await supabaseAdmin
-    .from('projects')
-    .update(updates)
-    .eq('id', req.params.id)
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true, data });
-});
-
-// DELETE project (also deletes its images via cascade)
-router.delete('/projects/:id', requireAuth, async (req: Request, res: Response) => {
-  const { error } = await supabaseAdmin
-    .from('projects')
-    .delete()
-    .eq('id', req.params.id);
-
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true });
-});
-
-// ─── Project Images ───────────────────────────────────────────────────────────
-
-// POST add image to project
-router.post('/projects/:id/images', requireAuth, async (req: Request, res: Response) => {
-  const { image_path, image_order } = req.body ?? {};
-  if (!image_path) {
-    return res.status(400).json({ ok: false, error: 'image_path is required' });
+    const data = await prisma.project.update({
+      where: { id: req.params.id },
+      data: updates,
+    });
+    res.json({ ok: true, data });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
   }
-
-  const { data, error } = await supabaseAdmin
-    .from('project_images')
-    .insert({
-      project_id: req.params.id,
-      image_path: image_path.trim(),
-      image_order: Number(image_order) || 0,
-    })
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true, data });
 });
 
-// DELETE project image
-router.delete('/projects/:projectId/images/:imageId', requireAuth, async (req: Request, res: Response) => {
-  const { error } = await supabaseAdmin
-    .from('project_images')
-    .delete()
-    .eq('id', req.params.imageId)
-    .eq('project_id', req.params.projectId);
+router.delete('/projects/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    await prisma.project.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
 
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true });
+// ─── Project Media ───────────────────────────────────────────────────────────
+
+router.post('/projects/:id/media', requireAuth, async (req: Request, res: Response): Promise<any> => {
+  const { media_url, media_type, order_index } = req.body ?? {};
+  if (!media_url) return res.status(400).json({ ok: false, error: 'media_url is required' });
+
+  try {
+    const data = await prisma.projectMedia.create({
+      data: {
+        project_id: req.params.id,
+        media_url: media_url.trim(),
+        media_type: media_type?.trim() ?? 'image',
+        order_index: Number(order_index) || 0,
+      }
+    });
+    res.json({ ok: true, data });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+router.delete('/projects/:projectId/media/:mediaId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const media = await prisma.projectMedia.findUnique({ where: { id: req.params.mediaId } });
+    if (media) {
+      const fileName = media.media_url.split('/').pop();
+      if (fileName) {
+        await supabaseAdmin.storage.from('projects').remove([fileName]);
+      }
+    }
+    await prisma.projectMedia.deleteMany({
+      where: { id: req.params.mediaId, project_id: req.params.projectId }
+    });
+    res.json({ ok: true });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+router.post('/projects/:id/reorder-media', requireAuth, async (req: Request, res: Response): Promise<any> => {
+  const { mediaIds } = req.body ?? {};
+  if (!Array.isArray(mediaIds)) return res.status(400).json({ ok: false, error: 'mediaIds is required' });
+
+  try {
+    const transaction = mediaIds.map((id, index) =>
+      prisma.projectMedia.update({ where: { id }, data: { order_index: index } })
+    );
+    await prisma.$transaction(transaction);
+    res.json({ ok: true });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  FAQ
 // ═════════════════════════════════════════════════════════════════════════════
 
-// GET all FAQs
 router.get('/faq', requireAuth, async (_req: Request, res: Response) => {
-  const { data, error } = await supabaseAdmin
-    .from('faq')
-    .select('*')
-    .order('display_order', { ascending: true });
-
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true, data });
-});
-
-// POST create FAQ
-router.post('/faq', requireAuth, async (req: Request, res: Response) => {
-  const { question, answer, display_order } = req.body ?? {};
-  if (!question || !answer) {
-    return res.status(400).json({ ok: false, error: 'Question and answer are required' });
+  try {
+    const data = await prisma.faq.findMany({ orderBy: { display_order: 'asc' } });
+    res.json({ ok: true, data });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
   }
-
-  const { data, error } = await supabaseAdmin
-    .from('faq')
-    .insert({
-      question: question.trim(),
-      answer: answer.trim(),
-      display_order: Number(display_order) || 0,
-    })
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true, data });
 });
 
-// PUT update FAQ
-router.put('/faq/:id', requireAuth, async (req: Request, res: Response) => {
+router.post('/faq', requireAuth, async (req: Request, res: Response): Promise<any> => {
   const { question, answer, display_order } = req.body ?? {};
-  const updates: Record<string, unknown> = {};
-  if (question !== undefined) updates.question = question.trim();
-  if (answer !== undefined) updates.answer = answer.trim();
-  if (display_order !== undefined) updates.display_order = Number(display_order);
+  if (!question || !answer) return res.status(400).json({ ok: false, error: 'Question and answer are required' });
 
-  const { data, error } = await supabaseAdmin
-    .from('faq')
-    .update(updates)
-    .eq('id', req.params.id)
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true, data });
+  try {
+    const data = await prisma.faq.create({
+      data: {
+        question: question.trim(),
+        answer: answer.trim(),
+        display_order: Number(display_order) || 0,
+      }
+    });
+    res.json({ ok: true, data });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
-// DELETE FAQ
-router.delete('/faq/:id', requireAuth, async (req: Request, res: Response) => {
-  const { error } = await supabaseAdmin
-    .from('faq')
-    .delete()
-    .eq('id', req.params.id);
+router.put('/faq/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const body = req.body ?? {};
+    const updates: Record<string, any> = {};
+    if (body.question !== undefined) updates.question = body.question.trim();
+    if (body.answer !== undefined) updates.answer = body.answer.trim();
+    if (body.display_order !== undefined) updates.display_order = Number(body.display_order);
 
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true });
+    const data = await prisma.faq.update({
+      where: { id: req.params.id },
+      data: updates,
+    });
+    res.json({ ok: true, data });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+router.delete('/faq/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    await prisma.faq.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  JOURNALS
 // ═════════════════════════════════════════════════════════════════════════════
 
-// GET all journals
 router.get('/journals', requireAuth, async (_req: Request, res: Response) => {
-  const { data, error } = await supabaseAdmin
-    .from('journals')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true, data });
-});
-
-// POST create journal
-router.post('/journals', requireAuth, async (req: Request, res: Response) => {
-  const { title, content } = req.body ?? {};
-  if (!title) {
-    return res.status(400).json({ ok: false, error: 'Title is required' });
+  try {
+    const data = await prisma.journal.findMany({ orderBy: { created_at: 'desc' } });
+    res.json({ ok: true, data });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
   }
-
-  const { data, error } = await supabaseAdmin
-    .from('journals')
-    .insert({ title: title.trim(), content: content?.trim() ?? '' })
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true, data });
 });
 
-// PUT update journal
-router.put('/journals/:id', requireAuth, async (req: Request, res: Response) => {
+router.post('/journals', requireAuth, async (req: Request, res: Response): Promise<any> => {
   const { title, content } = req.body ?? {};
-  const updates: Record<string, unknown> = {};
-  if (title !== undefined) updates.title = title.trim();
-  if (content !== undefined) updates.content = content.trim();
+  if (!title) return res.status(400).json({ ok: false, error: 'Title is required' });
 
-  const { data, error } = await supabaseAdmin
-    .from('journals')
-    .update(updates)
-    .eq('id', req.params.id)
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true, data });
+  try {
+    const data = await prisma.journal.create({
+      data: { title: title.trim(), content: content?.trim() ?? '' }
+    });
+    res.json({ ok: true, data });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
-// DELETE journal
-router.delete('/journals/:id', requireAuth, async (req: Request, res: Response) => {
-  const { error } = await supabaseAdmin
-    .from('journals')
-    .delete()
-    .eq('id', req.params.id);
+router.put('/journals/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const body = req.body ?? {};
+    const updates: Record<string, any> = {};
+    if (body.title !== undefined) updates.title = body.title.trim();
+    if (body.content !== undefined) updates.content = body.content.trim();
 
-  if (error) return res.status(500).json({ ok: false, error: error.message });
-  res.json({ ok: true });
+    const data = await prisma.journal.update({
+      where: { id: req.params.id },
+      data: updates,
+    });
+    res.json({ ok: true, data });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+router.delete('/journals/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    await prisma.journal.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 export default router;

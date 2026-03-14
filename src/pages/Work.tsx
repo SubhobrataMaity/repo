@@ -4,6 +4,8 @@ import { ArrowUpRight } from 'lucide-react';
 import { Magnetic } from '../components/Visuals';
 import { Link } from 'react-router-dom';
 import { fetchWorkPageProjects, type Project } from '../lib/supabase';
+import { LazyLoadImage } from 'react-lazy-load-image-component';
+import 'react-lazy-load-image-component/src/effects/blur.css';
 
 // Static fallback shown before Supabase data loads or when not configured
 const FALLBACK_PROJECTS: Project[] = [
@@ -62,32 +64,34 @@ export default function Work() {
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-24">
             {projects.map((project, i) => (
-              <motion.div
-                key={project.id}
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                className="group cursor-pointer"
-              >
-                <div className="overflow-hidden rounded-2xl mb-6 bg-gray-100">
-                  <img 
+              <Link to={`/work/${project.slug}`}>
+                <motion.div
+                  key={project.id}
+                  initial={{ opacity: 0, y: 40 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-50px" }}
+                  transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                  className="group cursor-pointer"
+                >
+                  <div className="overflow-hidden rounded-2xl mb-6 bg-gray-100">
+                    <LazyLoadImage 
                     src={project.cover_image} 
                     alt={project.title}
                     className="w-full aspect-[4/5] object-cover transition-transform duration-700 group-hover:scale-105"
-                    referrerPolicy="no-referrer"
+                    effect="blur"
                   />
-                </div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-3xl font-display font-medium mb-2">{project.title}</h3>
-                    <p className="text-sm uppercase tracking-widest opacity-60">
-                      {project.slug.replace(/-/g, ' ')}
-                    </p>
                   </div>
-                  <span className="text-sm font-mono opacity-40">{formatYear(project.created_at)}</span>
-                </div>
-              </motion.div>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-3xl font-display font-medium mb-2">{project.title}</h3>
+                      <p className="text-sm uppercase tracking-widest opacity-60">
+                        {project.slug.replace(/-/g, ' ')}
+                      </p>
+                    </div>
+                    <span className="text-sm font-mono opacity-40">{formatYear(project.created_at)}</span>
+                  </div>
+                </motion.div>
+              </Link>
             ))}
           </div>
         </div>

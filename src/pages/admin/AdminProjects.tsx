@@ -1,6 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import React, { useEffect, useState, useRef } from 'react';
 import AdminLayout from './AdminLayout';
-import { Plus, Pencil, Trash2, Eye, EyeOff, GripVertical, X, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, EyeOff, GripVertical, X, Check, UploadCloud } from 'lucide-react';
+
+interface ProjectMedia {
+  id: string;
+  project_id: string;
+  media_url: string;
+  media_type: string;
+  order_index: number;
+}
 
 interface Project {
   id: string;
@@ -13,9 +24,10 @@ interface Project {
   show_in_selected_work: boolean;
   display_order: number;
   created_at: string;
+  project_media?: ProjectMedia[];
 }
 
-const EMPTY: Omit<Project, 'id' | 'created_at'> = {
+const EMPTY: Omit<Project, 'id' | 'created_at' | 'project_images'> = {
   title: '',
   description: '',
   slug: '',
@@ -30,6 +42,29 @@ function slugify(s: string) {
   return s.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
+function SortableMediaItem({ media, handleDeleteMedia }: { media: ProjectMedia, handleDeleteMedia: (id: string) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: media.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="relative group w-full aspect-square bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+      <img src={media.media_url} alt="Project media" className="w-full h-full object-cover" />
+      <button
+        onClick={() => handleDeleteMedia(media.id)}
+        className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <div className="w-8 h-8 rounded-full bg-red-500/80 flex items-center justify-center text-white">
+          <Trash2 size={14} />
+        </div>
+      </button>
+    </div>
+  );
+}
+
 export default function AdminProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,9 +72,33 @@ export default function AdminProjects() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
   const [form, setForm] = useState({ ...EMPTY });
+  const [projectMedia, setProjectMedia] = useState<ProjectMedia[]>([]);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [formError, setFormError] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  function handleDragEnd(event: any) {
+    const { active, over } = event;
+
+    if (active.id !== over.id) {
+      setProjectMedia((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  }
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     setLoading(true);
@@ -60,6 +119,7 @@ export default function AdminProjects() {
   function openCreate() {
     setEditing(null);
     setForm({ ...EMPTY });
+    setProjectMedia([]);
     setFormError('');
     setShowForm(true);
   }
@@ -76,6 +136,7 @@ export default function AdminProjects() {
       show_in_selected_work: p.show_in_selected_work,
       display_order: p.display_order,
     });
+    setProjectMedia(p.project_media || []);
     setFormError('');
     setShowForm(true);
   }
@@ -83,7 +144,6 @@ export default function AdminProjects() {
   function handleField<K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) {
     setForm(f => {
       const next = { ...f, [k]: v };
-      // Auto-generate slug from title if creating new
       if (k === 'title' && !editing) {
         next.slug = slugify(v as string);
         next.folder_name = slugify(v as string);
@@ -92,9 +152,93 @@ export default function AdminProjects() {
     });
   }
 
+  async function uploadFile(file: File) {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/api/admin/upload', {
+      method: 'POST',
+      body: fd,
+      credentials: 'include',
+    });
+    const json = await res.json();
+    if (json.ok) return json.url;
+    throw new Error(json.error || 'Upload failed');
+  }
+
+  async function handleCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files?.length) return;
+    setUploadingImage(true);
+    setFormError('');
+    try {
+      const url = await uploadFile(e.target.files[0]);
+      handleField('cover_image', url);
+    } catch (err: any) {
+      setFormError(err.message);
+    } finally {
+      setUploadingImage(false);
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function handleAddMedia(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!editing || !e.target.files?.length) return;
+    setUploadingImage(true);
+    setFormError('');
+    try {
+      const file = e.target.files[0];
+      const url = await uploadFile(file);
+      const media_type = file.type.split('/')[0];
+      
+      const res = await fetch(`/api/admin/projects/${editing.id}/media`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ media_url: url, media_type, order_index: projectMedia.length }),
+        credentials: 'include',
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setProjectMedia(prev => [...prev, json.data]);
+        load();
+      } else {
+        setFormError(json.error || 'Failed to add media');
+      }
+    } catch(err: any){
+      setFormError(err.message);
+    } finally {
+      setUploadingImage(false);
+      if (galleryInputRef.current) galleryInputRef.current.value = '';
+    }
+  }
+
+  async function handleDeleteMedia(mediaId: string) {
+    if (!editing) return;
+    try {
+      const res = await fetch(`/api/admin/projects/${editing.id}/media/${mediaId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        setProjectMedia(prev => prev.filter(media => media.id !== mediaId));
+        load();
+      }
+    } catch(err: any) {
+      setFormError('Failed to delete media');
+    }
+  }
+
   async function handleSave() {
     if (!form.title.trim()) { setFormError('Title is required'); return; }
     if (!form.slug.trim()) { setFormError('Slug is required'); return; }
+    
+    if (form.show_in_selected_work && (!editing || !editing.show_in_selected_work)) {
+      const selectedCount = projects.filter(proj => proj.show_in_selected_work && proj.id !== editing?.id).length;
+      if (selectedCount >= 4) {
+        setFormError('Maximum 4 projects can be featured in Selected Works.');
+        return;
+      }
+    }
+
     setSaving(true);
     setFormError('');
     try {
@@ -108,6 +252,15 @@ export default function AdminProjects() {
       });
       const json = await res.json();
       if (json.ok) {
+        if (editing) {
+          const mediaIds = projectMedia.map(m => m.id);
+          await fetch(`/api/admin/projects/${editing.id}/reorder-media`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mediaIds }),
+            credentials: 'include',
+          });
+        }
         setShowForm(false);
         load();
       } else {
@@ -134,6 +287,15 @@ export default function AdminProjects() {
   }
 
   async function toggleField(p: Project, field: 'show_in_work_page' | 'show_in_selected_work') {
+    if (field === 'show_in_selected_work' && !p.show_in_selected_work) {
+      const selectedCount = projects.filter(proj => proj.show_in_selected_work).length;
+      if (selectedCount >= 4) {
+        setError('Maximum 4 projects can be featured in Selected Works.');
+        setTimeout(() => setError(''), 3000);
+        return;
+      }
+    }
+
     await fetch(`/api/admin/projects/${p.id}`, {
       method: 'PUT',
       credentials: 'include',
@@ -197,7 +359,7 @@ export default function AdminProjects() {
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <p className="text-white font-semibold text-sm truncate">{p.title}</p>
-                  <p className="text-white/30 text-xs mt-0.5">/{p.slug} · Order: {p.display_order}</p>
+                  <p className="text-white/30 text-xs mt-0.5">/{p.slug} · Order: {p.display_order} · Media: {p.project_media?.length||0}</p>
                 </div>
 
                 {/* Toggles */}
@@ -235,10 +397,10 @@ export default function AdminProjects() {
                   {deleteConfirm === p.id ? (
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => handleDelete(p.id)}
-                        className="w-8 h-8 rounded-lg bg-red-500/20 hover:bg-red-500/30 flex items-center justify-center text-red-400 transition-colors"
+                         onClick={() => handleDelete(p.id)}
+                         className="w-8 h-8 rounded-lg bg-red-500/20 hover:bg-red-500/30 flex items-center justify-center text-red-400 transition-colors"
                       >
-                        <Check size={14} />
+                         <Check size={14} />
                       </button>
                       <button
                         onClick={() => setDeleteConfirm(null)}
@@ -286,7 +448,6 @@ export default function AdminProjects() {
                   { label: 'Title *', key: 'title', type: 'text', placeholder: 'Project title' },
                   { label: 'Slug *', key: 'slug', type: 'text', placeholder: 'project-slug' },
                   { label: 'Folder Name', key: 'folder_name', type: 'text', placeholder: 'project-folder' },
-                  { label: 'Cover Image URL', key: 'cover_image', type: 'text', placeholder: 'https://...' },
                   { label: 'Display Order', key: 'display_order', type: 'number', placeholder: '0' },
                 ].map(f => (
                   <div key={f.key}>
@@ -300,6 +461,32 @@ export default function AdminProjects() {
                     />
                   </div>
                 ))}
+
+                <div>
+                  <label className="block text-white/50 text-xs font-bold uppercase tracking-widest mb-1.5">Cover Image (URL or Upload)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={form.cover_image}
+                      onChange={e => handleField('cover_image', e.target.value)}
+                      placeholder="https://... or click upload"
+                      className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FFD100] transition-colors"
+                    />
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleCoverUpload} />
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white text-sm font-semibold transition-colors disabled:opacity-50"
+                    >
+                      <UploadCloud size={16} /> Upload
+                    </button>
+                  </div>
+                  {form.cover_image && (
+                     <div className="mt-2 w-full h-32 rounded-xl overflow-hidden border border-white/10">
+                        <img src={form.cover_image} alt="Cover Preview" className="w-full h-full object-cover" />
+                     </div>
+                  )}
+                </div>
 
                 <div>
                   <label className="block text-white/50 text-xs font-bold uppercase tracking-widest mb-1.5">Description</label>
@@ -328,6 +515,42 @@ export default function AdminProjects() {
                     </label>
                   ))}
                 </div>
+
+                {/* Multiple Images Upload (Only when editing an existing project) */}
+                {editing && (
+                  <div className="pt-4 mt-6 border-t border-white/10">
+                     <div className="flex items-center justify-between mb-3">
+                        <label className="block text-white/50 text-xs font-bold uppercase tracking-widest">Project Media ({projectMedia.length})</label>
+                        <input type="file" ref={galleryInputRef} className="hidden" accept="image/*,video/*" onChange={handleAddMedia} />
+                        <button 
+                          onClick={() => galleryInputRef.current?.click()}
+                          disabled={uploadingImage}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-[#FFD100]/20 text-[#FFD100] hover:bg-[#FFD100]/30 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                        >
+                          <UploadCloud size={14} /> Add Media
+                        </button>
+                     </div>
+                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                       <SortableContext items={projectMedia} strategy={verticalListSortingStrategy}>
+                         <div className="grid grid-cols-3 gap-3">
+                            {projectMedia.map((media) => (
+                              <SortableMediaItem key={media.id} media={media} handleDeleteMedia={handleDeleteMedia} />
+                            ))}
+                         </div>
+                       </SortableContext>
+                     </DndContext>
+                     {!projectMedia.length && (
+                       <div className="text-center py-4 bg-white/5 rounded-xl border border-white/10 text-white/30 text-xs">
+                         No project media added yet.
+                       </div>
+                     )}
+                  </div>
+                )}
+                {!editing && (
+                   <div className="pt-4 mt-6 border-t border-white/10 text-center py-4 bg-white/5 rounded-xl border border-dashed border-white/10 text-white/30 text-xs">
+                     Save this project first to manage its project media.
+                   </div>
+                )}
               </div>
 
               {/* Modal footer */}
@@ -340,10 +563,10 @@ export default function AdminProjects() {
                 </button>
                 <button
                   onClick={handleSave}
-                  disabled={saving}
+                  disabled={saving || uploadingImage}
                   className="px-5 py-2 bg-[#FFD100] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#FFD100]/90 transition-colors disabled:opacity-50"
                 >
-                  {saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Project'}
+                  {saving ? 'Saving…' : uploadingImage ? 'Uploading…' : editing ? 'Save Changes' : 'Create Project'}
                 </button>
               </div>
             </div>

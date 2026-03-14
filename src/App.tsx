@@ -12,12 +12,14 @@ import Contact from './pages/Contact';
 import Journal from './pages/Journal';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
+import ProjectPage from './pages/work/slug';
 
 // Admin pages — completely isolated, no Nav/Footer/grain overlay
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminProjects from './pages/admin/AdminProjects';
 import AdminFAQ from './pages/admin/AdminFAQ';
 import AdminJournals from './pages/admin/AdminJournals';
+import AdminLogin from './pages/admin/AdminLogin';
 
 /** Wraps public pages with the shared chrome (grain, nav, footer). */
 function PublicShell({ children }: { children: React.ReactNode }) {
@@ -38,6 +40,7 @@ export default function App() {
       <Routes>
         {/* ── Admin (no public chrome) ─────────────────────────── */}
         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/projects"  element={<AdminProjects />} />
         <Route path="/admin/faq"       element={<AdminFAQ />} />
@@ -48,6 +51,7 @@ export default function App() {
         <Route path="/about"   element={<PublicShell><About /></PublicShell>} />
         <Route path="/services" element={<PublicShell><Services /></PublicShell>} />
         <Route path="/work"    element={<PublicShell><Work /></PublicShell>} />
+        <Route path="/work/:slug" element={<PublicShell><ProjectPage /></PublicShell>} />
         <Route path="/contact" element={<PublicShell><Contact /></PublicShell>} />
         <Route path="/privacy" element={<PublicShell><Privacy /></PublicShell>} />
         <Route path="/terms"   element={<PublicShell><Terms /></PublicShell>} />
