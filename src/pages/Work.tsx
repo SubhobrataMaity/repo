@@ -8,15 +8,16 @@ import { LazyLoadImage } from 'react-lazy-load-image-component';
 import 'react-lazy-load-image-component/src/effects/blur.css';
 
 // Static fallback shown before Supabase data loads or when not configured
-const FALLBACK_PROJECTS: Project[] = [
-  { id: '1', title: 'Neon Pulse',      description: '', slug: 'neon-pulse',       folder_name: '', cover_image: 'https://picsum.photos/seed/neon/800/1000',     show_in_work_page: true, show_in_selected_work: true,  display_order: 0, created_at: '2026-01-01' },
-  { id: '2', title: 'Ethereal UI',     description: '', slug: 'ethereal-ui',      folder_name: '', cover_image: 'https://picsum.photos/seed/ui/800/1000',       show_in_work_page: true, show_in_selected_work: true,  display_order: 1, created_at: '2025-06-01' },
-  { id: '3', title: 'Bold Identity',   description: '', slug: 'bold-identity',    folder_name: '', cover_image: 'https://picsum.photos/seed/brand/800/1000',    show_in_work_page: true, show_in_selected_work: true,  display_order: 2, created_at: '2026-02-01' },
-  { id: '4', title: 'Cyberpunk 2077',  description: '', slug: 'cyberpunk-2077',   folder_name: '', cover_image: 'https://picsum.photos/seed/cyber/800/1000',    show_in_work_page: true, show_in_selected_work: false, display_order: 3, created_at: '2024-11-01' },
-  { id: '5', title: 'Zenith App',      description: '', slug: 'zenith-app',       folder_name: '', cover_image: 'https://picsum.photos/seed/zenith/800/1000',   show_in_work_page: true, show_in_selected_work: false, display_order: 4, created_at: '2025-03-01' },
-  { id: '6', title: 'Aura Skincare',   description: '', slug: 'aura-skincare',    folder_name: '', cover_image: 'https://picsum.photos/seed/aura/800/1000',     show_in_work_page: true, show_in_selected_work: false, display_order: 5, created_at: '2026-01-15' },
-  { id: '7', title: 'Velocity Motors', description: '', slug: 'velocity-motors',  folder_name: '', cover_image: 'https://picsum.photos/seed/velocity/800/1000', show_in_work_page: true, show_in_selected_work: false, display_order: 6, created_at: '2025-09-01' },
-  { id: '8', title: 'Echo Audio',      description: '', slug: 'echo-audio',       folder_name: '', cover_image: 'https://picsum.photos/seed/echo/800/1000',     show_in_work_page: true, show_in_selected_work: false, display_order: 7, created_at: '2024-07-01' },
+const DUMMY_PROJECTS = [
+  { id: '1', title: 'Neon Pulse', description: 'A vibrant cyberpunk-inspired UI design system for a next-gen music platform. Deep neon colors, fast-paced motion graphics, and high energy.', slug: 'neon-pulse', folder_name: 'neon-pulse', cover_image: 'https://picsum.photos/seed/neon/800/1000', show_in_work_page: true, show_in_selected_work: true, display_order: 0, created_at: new Date().toISOString() },
+  { id: '2', title: 'Ethereal UI', description: 'A soft, glassmorphic layout created for a wellness and meditation startup. Smooth gradients and subtle frosted details.', slug: 'ethereal-ui', folder_name: 'ethereal-ui', cover_image: 'https://picsum.photos/seed/ui/800/1000', show_in_work_page: true, show_in_selected_work: true, display_order: 1, created_at: new Date().toISOString() },
+  { id: '3', title: 'Bold Identity', description: 'Strong, loud, and confident branding for a streetwear line. Monochromatic themes mixed with heavy brutalist typography.', slug: 'bold-identity', folder_name: 'bold-identity', cover_image: 'https://picsum.photos/seed/brand/800/1000', show_in_work_page: true, show_in_selected_work: true, display_order: 2, created_at: new Date().toISOString() },
+  { id: '4', title: 'Future Flow', description: 'Fluid interaction design demonstrating cutting edge mobile animations and scroll-triggered physics.', slug: 'future-flow', folder_name: 'future-flow', cover_image: 'https://picsum.photos/seed/flow/800/1000', show_in_work_page: true, show_in_selected_work: true, display_order: 3, created_at: new Date().toISOString() },
+  { id: '5', title: 'Cyberpunk 2077', description: 'Night City inspired concept interfaces with glaring light artifacts, high tech borders, and gritty details.', slug: 'cyberpunk-2077', folder_name: 'cyberpunk', cover_image: 'https://picsum.photos/seed/cyber/800/1000', show_in_work_page: true, show_in_selected_work: false, display_order: 4, created_at: new Date().toISOString() },
+  { id: '6', title: 'Zenith App', description: 'Productivity application focused on deep work phases featuring dark mode default aesthetics and minimal distractions.', slug: 'zenith-app', folder_name: 'zenith', cover_image: 'https://picsum.photos/seed/zenith/800/1000', show_in_work_page: true, show_in_selected_work: false, display_order: 5, created_at: new Date().toISOString() },
+  { id: '7', title: 'Aura Skincare', description: 'E-commerce platform with elegant natural tones, soft photography, and clean typography.', slug: 'aura-skincare', folder_name: 'aura', cover_image: 'https://picsum.photos/seed/aura/800/1000', show_in_work_page: true, show_in_selected_work: false, display_order: 6, created_at: new Date().toISOString() },
+  { id: '8', title: 'Velocity Motors', description: 'High performance automotive landing pages with aggressive styling and raw speed indicators.', slug: 'velocity-motors', folder_name: 'velocity', cover_image: 'https://picsum.photos/seed/velocity/800/1000', show_in_work_page: true, show_in_selected_work: false, display_order: 7, created_at: new Date().toISOString() },
+  { id: '9', title: 'Echo Audio', description: 'Sleek dark interface for audiophiles. Crisp edges, high end aesthetic, heavily focused on product imagery.', slug: 'echo-audio', folder_name: 'echo', cover_image: 'https://picsum.photos/seed/echo/800/1000', show_in_work_page: true, show_in_selected_work: false, display_order: 8, created_at: new Date().toISOString() },
 ];
 
 function formatYear(iso: string) {
@@ -25,7 +26,7 @@ function formatYear(iso: string) {
 }
 
 export default function Work() {
-  const [projects, setProjects] = useState<Project[]>(FALLBACK_PROJECTS);
+  const [projects, setProjects] = useState<Project[]>(DUMMY_PROJECTS as Project[]);
 
   // Scroll to top on mount
   useEffect(() => { window.scrollTo(0, 0); }, []);
