@@ -365,7 +365,7 @@ export default function Home() {
             transition={{ duration: 0.8 }}
           >
             <span className="text-xs font-bold uppercase tracking-[0.4em] text-brand-black/40 mb-4 block">Portfolio</span>
-            <h2 className="text-7xl md:text-[10rem] leading-[0.8] tracking-tighter">Selected <span className="italic-serif font-normal">Work.</span></h2>
+            <h2 className="text-5xl md:text-[10rem] leading-[0.8] tracking-tighter">Selected <span className="italic-serif font-normal">Work.</span></h2>
           </motion.div>
           <motion.p 
             initial={{ opacity: 0, x: 50 }}
@@ -380,14 +380,14 @@ export default function Home() {
         
         <div className="flex gap-6 px-6 md:px-12 overflow-x-auto custom-scrollbar pt-16 pb-24 snap-x">
           {projects.map((project, i) => (
-            <Link to={`/work/${project.slug}`} key={project.id} className="min-w-[calc(25vw-2rem)] max-w-[340px] snap-start group cursor-pointer block h-full">
+            <Link to={`/work/${project.slug}`} key={project.id} className="min-w-[85vw] md:min-w-[calc(25vw-2rem)] max-w-[340px] snap-center md:snap-start group cursor-pointer block h-full">
               <motion.div
                 initial={{ opacity: 0, scale: 0.9, x: 50 }}
                 whileInView={{ opacity: 1, scale: 1, x: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1, duration: 0.6 }}
                 whileHover={{ y: -16 }}
-                className="h-full bg-[#FDFCFB] p-4 md:p-6 rounded-[40px] border-4 border-brand-black shadow-[16px_16px_0px_rgba(10,10,10,1)] flex flex-col"
+                className="h-full bg-[#FDFCFB] p-5 md:p-6 rounded-[32px] md:rounded-[40px] border-4 border-brand-black shadow-[8px_8px_0px_rgba(10,10,10,1)] md:shadow-[16px_16px_0px_rgba(10,10,10,1)] flex flex-col"
               >
               <div className="w-full aspect-[4/5] rounded-[24px] overflow-hidden border-2 border-brand-black mb-6 relative transform-gpu">
                 <img 
@@ -404,7 +404,7 @@ export default function Home() {
               </div>
               <div className="flex flex-col flex-grow justify-between px-2">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-brand-black text-3xl md:text-4xl font-display leading-none group-hover:italic-serif transition-all duration-300">{project.title}</h3>
+                  <h3 className="text-brand-black text-2xl md:text-4xl font-display leading-none group-hover:italic-serif transition-all duration-300">{project.title}</h3>
                   <div className="px-4 py-2 rounded-full border-2 border-brand-black text-[10px] font-bold uppercase tracking-widest text-brand-black group-hover:bg-brand-black group-hover:text-brand-yellow transition-colors duration-300">
                     {project.slug.replace(/-/g, ' ')}
                   </div>

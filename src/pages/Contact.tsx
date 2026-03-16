@@ -150,9 +150,9 @@ export default function Contact() {
         <button
           key={i}
           onClick={() => handleDateClick(i)}
-          className={`h-12 md:h-16 rounded-2xl flex items-center justify-center text-sm font-bold transition-all relative group ${
+          className={`h-10 md:h-16 rounded-xl md:rounded-2xl flex items-center justify-center text-sm font-bold transition-all relative group ${
             isSelected(i)
-              ? 'bg-brand-black text-brand-yellow shadow-lg scale-105'
+              ? 'bg-brand-black text-brand-yellow shadow-md md:shadow-lg scale-105'
               : 'hover:bg-brand-yellow/20 text-brand-black/60 hover:text-brand-black'
           } ${isToday(i) ? 'border-2 border-brand-yellow' : ''}`}
         >
@@ -176,7 +176,7 @@ export default function Contact() {
           className="text-center mb-16"
         >
           <span className="text-xs font-bold uppercase tracking-[0.4em] text-brand-black/40 mb-4 block">Booking</span>
-          <h1 className="text-6xl md:text-8xl leading-[0.8] tracking-tighter mb-6">
+          <h1 className="text-5xl md:text-8xl leading-[0.8] tracking-tighter mb-6">
             Start Your <span className="italic-serif font-normal">Trip.</span>
           </h1>
           <p className="text-xl opacity-60 max-w-2xl mx-auto">
@@ -191,7 +191,7 @@ export default function Contact() {
               initial={{ opacity: 0, x: -30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.2 }}
-              className="paper-panel p-8 md:p-10 border-2 border-brand-black/5"
+              className="paper-panel p-5 md:p-10 border-2 border-brand-black/5"
             >
               <div className="flex items-center justify-between mb-10">
                 <div className="flex items-center gap-4">
@@ -229,7 +229,7 @@ export default function Contact() {
               initial={{ opacity: 0, x: -30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
-              className="paper-panel p-8 md:p-10 border-2 border-brand-black/5"
+              className="paper-panel p-5 md:p-10 border-2 border-brand-black/5"
             >
               <div className="flex items-center gap-4 mb-8">
                 <div className="w-12 h-12 rounded-2xl bg-brand-yellow flex items-center justify-center border-2 border-brand-black shadow-[4px_4px_0px_rgba(10,10,10,1)]">
@@ -262,7 +262,7 @@ export default function Contact() {
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4 }}
-              className="paper-panel p-8 md:p-10 border-2 border-brand-black/5 sticky top-32"
+              className="paper-panel p-5 md:p-10 border-2 border-brand-black/5 sticky top-32"
             >
               <div className="flex items-center gap-4 mb-10">
                 <div className="w-12 h-12 rounded-2xl bg-brand-yellow flex items-center justify-center border-2 border-brand-black shadow-[4px_4px_0px_rgba(10,10,10,1)]">
@@ -434,7 +434,7 @@ export default function Contact() {
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="paper-panel p-12 max-w-lg w-full text-center border-4 border-brand-black shadow-[30px_30px_0px_rgba(255,209,0,1)]"
+              className="paper-panel p-8 md:p-12 max-w-lg w-full text-center border-4 border-brand-black shadow-[15px_15px_0px_rgba(255,209,0,1)] md:shadow-[30px_30px_0px_rgba(255,209,0,1)]"
             >
               <div className="w-24 h-24 rounded-full bg-brand-yellow border-4 border-brand-black flex items-center justify-center mx-auto mb-8 shadow-xl">
                 <Check size={48} strokeWidth={3} />

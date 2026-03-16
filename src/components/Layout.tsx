@@ -18,6 +18,10 @@ export const Nav = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
+
   return (
     <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-7xl">
       <motion.div 
@@ -121,7 +125,11 @@ export const Nav = () => {
             >
               About
             </Link>
-            <Link to="/contact" className="w-full py-4 bg-brand-black text-brand-yellow rounded-2xl text-sm font-bold uppercase tracking-widest flex items-center justify-center">
+            <Link 
+              to="/contact" 
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="w-full py-4 bg-brand-black text-brand-yellow rounded-2xl text-sm font-bold uppercase tracking-widest flex items-center justify-center"
+            >
               Start a Trip
             </Link>
           </motion.div>
