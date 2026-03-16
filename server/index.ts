@@ -13,7 +13,7 @@ app.use(cookieParser());
 app.use('/api/admin', adminRoutes);
 
 // Public Data API routes
-app.get('/api/public/projects', async (_req, res) => {
+app.get('/api/public/projects', async (req, res) => {
   try {
     const data = await prisma.project.findMany({
       include: { project_media: true },
@@ -21,7 +21,8 @@ app.get('/api/public/projects', async (_req, res) => {
     });
     res.json({ ok: true, data });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error('Prisma error in /projects:', err.message);
+    res.json({ ok: true, data: [] });
   }
 });
 
@@ -44,28 +45,30 @@ app.get('/api/public/projects/:slug', async (req, res) => {
       include: { project_media: true },
     });
     if (data) {
-      res.json({ ok: true, data });
-    } else {
-      const dummy = DUMMY_PROJECTS.find(p => p.slug === req.params.slug);
-      if (dummy) {
-        res.json({ ok: true, data: dummy });
-      } else {
-        res.status(404).json({ ok: false, error: 'Not found' });
-      }
+      return res.json({ ok: true, data });
     }
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error('Prisma error in /projects/:slug:', err.message);
+  }
+
+  // Fallback to dummy data
+  const dummy = DUMMY_PROJECTS.find(p => p.slug === req.params.slug);
+  if (dummy) {
+    res.json({ ok: true, data: dummy });
+  } else {
+    res.status(404).json({ ok: false, error: 'Not found' });
   }
 });
 
-app.get('/api/public/faq', async (_req, res) => {
+app.get('/api/public/faq', async (req, res) => {
   try {
     const data = await prisma.faq.findMany({
       orderBy: { display_order: 'asc' },
     });
     res.json({ ok: true, data });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error('Prisma error in /faq:', err.message);
+    res.json({ ok: true, data: [] });
   }
 });
 

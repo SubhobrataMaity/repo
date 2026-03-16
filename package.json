@@ -7,7 +7,7 @@
     "dev": "npx prisma db push --accept-data-loss && npm run seed:admin && concurrently \"npm run dev:client\" \"npm run dev:server\"",
     "dev:client": "vite --port=3000 --host=0.0.0.0",
     "dev:server": "tsx watch server/index.ts",
-    "build": "vite build",
+    "build": "npx prisma generate && npx prisma db push --accept-data-loss && npm run seed:admin && vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
